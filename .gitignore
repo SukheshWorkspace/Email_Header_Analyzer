@@ -1,0 +1,26 @@
+ --- Python & Environment ---
+_pycache_/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+# --- Security & Credentials (CRITICAL) ---
+# Secrets for API keys, mail passwords, and tokens
+.env
+.env.*
+secrets.py
+credentials.json
+*.pem
+*.key
+
+# --- API & Frameworks ---
+# Flask/Django instance folders often contain secrets
+instance/
+local_settings.py
+
+# --- Mail & Logs ---
+# Prevent leaking mail logs or debug info
+*.log
+mail_dumps/

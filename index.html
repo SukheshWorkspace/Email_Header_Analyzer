@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email Threat Analyzer</title>
+<style>
+:root {
+  --bg: #010101;
+  --text: #00ff00;
+  --secondary: #00cfff;
+  --accent: #ff00ff;
+  --error: #ff3b3b;
+  --warning: #ffff00;
+  --card-bg: rgba(17,17,17,0.92);
+  --font: "Courier New", monospace;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+canvas#matrixCanvas {
+  position: fixed;
+  top:0; left:0;
+  width:100%; height:100%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+header {
+  text-align: center;
+  padding: 2rem 1rem 1rem;
+  z-index: 1;
+  position: relative;
+}
+header h1 {
+  font-size: 2rem;
+  animation: flicker 2s infinite;
+  letter-spacing: 3px;
+  text-shadow: 0 0 10px var(--text);
+}
+header .version {
+  color: var(--secondary);
+  text-shadow: 0 0 8px var(--secondary);
+  margin-top: 6px;
+  font-size: 0.85rem;
+  letter-spacing: 2px;
+}
+
+@keyframes flicker {
+  0%,19%,21%,23%,25%,54%,56%,100%{ opacity:1; }
+  20%,22%,24%,55%{ opacity: 0.4; }
+}
+
+/* ── Config bar (token) ──────────────────────────────── */
+.config-bar {
+  display: flex;
+  justify-content: center;
+  padding: 0 2rem 0.5rem;
+  z-index: 1;
+  position: relative;
+}
+.config-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(0,207,255,0.3);
+  border-radius: 5px;
+  padding: 0.5rem 1rem;
+  width: 100%;
+  max-width: 900px;
+}
+.config-inner label {
+  font-size: 0.75rem;
+  color: var(--secondary);
+  white-space: nowrap;
+  letter-spacing: 1px;
+}
+.config-inner input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--secondary);
+  font-family: var(--font);
+  font-size: 0.8rem;
+  outline: none;
+  letter-spacing: 1px;
+}
+.config-inner input::placeholder { color: rgba(0,207,255,0.3); }
+
+/* ── Input section ───────────────────────────────────── */
+.input-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem 2rem;
+  z-index: 1;
+  position: relative;
+}
+
+textarea {
+  width: 100%;
+  max-width: 900px;
+  height: 180px;
+  background: rgba(0,0,0,0.7);
+  color: var(--text);
+  border: 1px solid var(--text);
+  padding: 15px;
+  font-size: 14px;
+  resize: vertical;
+  box-shadow: 0 0 15px rgba(0,255,0,0.2);
+  border-radius: 5px;
+  backdrop-filter: blur(5px);
+  line-height: 1.4;
+  font-family: var(--font);
+}
+textarea:focus {
+  outline: 2px solid var(--secondary);
+  box-shadow: 0 0 25px rgba(0,207,255,0.3);
+}
+
+.buttons {
+  margin-top: 1.2rem;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+button {
+  padding: 0.65rem 1.4rem;
+  background: rgba(0,0,0,0.8);
+  border: 1px solid var(--text);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: bold;
+  border-radius: 5px;
+  transition: all 0.3s ease;
+  text-shadow: 0 0 5px var(--text);
+  letter-spacing: 1px;
+  font-family: var(--font);
+  font-size: 0.85rem;
+}
+button:hover {
+  box-shadow: 0 0 20px var(--text), 0 0 40px var(--secondary);
+  transform: translateY(-2px);
+}
+button:active { transform: translateY(1px); }
+
+/* ── Loading / error ────────────────────────────────── */
+#loading {
+  text-align: center;
+  margin: 1rem 0;
+  font-weight: bold;
+  letter-spacing: 3px;
+  color: var(--secondary);
+  text-shadow: 0 0 8px var(--secondary);
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink { 50%{ opacity: 0.3; } }
+
+.hidden { display: none !important; }
+
+.error {
+  color: var(--error);
+  text-align: center;
+  text-shadow: 0 0 8px var(--error);
+  margin: 1rem auto;
+  font-weight: bold;
+  padding: 1rem;
+  background: rgba(255,0,0,0.08);
+  border: 1px solid var(--error);
+  max-width: 600px;
+  border-radius: 5px;
+}
+
+/* ── Results grid ───────────────────────────────────── */
+.results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.5rem;
+  padding: 2rem;
+  z-index: 1;
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--secondary);
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 0 15px rgba(0,207,255,0.15);
+  backdrop-filter: blur(15px);
+  display: flex;
+  flex-direction: column;
+}
+.card h2 {
+  margin-bottom: 15px;
+  border-bottom: 1px solid rgba(0,207,255,0.4);
+  padding-bottom: 8px;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--secondary);
+  text-shadow: 0 0 8px var(--secondary);
+}
+
+.card p { margin-bottom: 8px; line-height: 1.5; font-size: 0.9rem; }
+
+/* Status badges */
+.pass    { color: var(--text);    text-shadow: 0 0 8px var(--text);    font-weight: bold; }
+.fail    { color: var(--error);   text-shadow: 0 0 10px var(--error);  font-weight: bold; }
+.missing { color: var(--warning); text-shadow: 0 0 8px var(--warning); font-weight: bold; }
+
+/* ── Scroll box ─────────────────────────────────────── */
+.scroll-box {
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.scroll-box::-webkit-scrollbar { width: 6px; }
+.scroll-box::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.5);
+  border-radius: 3px;
+  border: 1px solid var(--secondary);
+}
+.scroll-box::-webkit-scrollbar-thumb { background: var(--text); border-radius: 3px; }
+.scroll-box::-webkit-scrollbar-thumb:hover { background: var(--secondary); }
+
+/* ── List items ─────────────────────────────────────── */
+.list-item { display: flex; flex-direction: column; gap: 8px; }
+.list-item p {
+  background: rgba(0,0,0,0.8);
+  border: 1px solid var(--secondary);
+  padding: 0.5rem 0.8rem;
+  border-radius: 5px;
+  font-size: 0.82rem;
+  word-break: break-all;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+#warnings .list-item p,
+#warnings p {
+  color: var(--warning);
+  border-color: var(--warning);
+  background: rgba(50,50,0,0.8);
+  box-shadow: 0 0 6px rgba(255,255,0,0.2);
+}
+
+/* ── Payload grid ───────────────────────────────────── */
+.payload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-top: 10px;
+}
+.payload-section-label {
+  color: var(--secondary);
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+}
+
+/* ── Progress bar ───────────────────────────────────── */
+.progress-bar {
+  width: 100%;
+  height: 20px;
+  background: rgba(17,17,17,0.8);
+  border-radius: 4px;
+  margin-top: 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(0,255,0,0.3);
+}
+#progress {
+  height: 100%;
+  background: var(--text);
+  box-shadow: 0 0 15px var(--text);
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 0%;
+}
+
+/* ── Confidence badge ───────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  letter-spacing: 2px;
+  border: 1px solid;
+}
+.badge-high    { color: var(--error);   border-color: var(--error);   background: rgba(255,59,59,0.1); }
+.badge-medium  { color: var(--warning); border-color: var(--warning); background: rgba(255,255,0,0.08); }
+.badge-low     { color: var(--text);    border-color: var(--text);    background: rgba(0,255,0,0.06); }
+
+/* ── Trace ID ───────────────────────────────────────── */
+.trace-id {
+  font-size: 0.7rem;
+  color: rgba(0,207,255,0.4);
+  margin-top: 12px;
+  letter-spacing: 1px;
+  border-top: 1px solid rgba(0,207,255,0.15);
+  padding-top: 8px;
+}
+
+/* ── Footer ─────────────────────────────────────────── */
+footer {
+  text-align: center;
+  padding: 2rem;
+  color: rgba(0,207,255,0.3);
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  z-index: 1;
+  position: relative;
+}
+</style>
+</head>
+<body>
+
+<canvas id="matrixCanvas"></canvas>
+
+<header>
+  <h1>&gt; EMAIL HEADER ANALYZER</h1>
+  <p class="version">// CYBERPUNK HACKER CONSOLE v9.0.0 — BACKEND API COMPATIBLE</p>
+</header>
+
+<!-- API Token config (stored in memory only, never persisted) -->
+<div class="config-bar">
+  <div class="config-inner">
+    <label>API TOKEN &gt;</label>
+    <input type="password" id="apiToken" placeholder="leave blank if API_TOKEN not set on server" autocomplete="off" spellcheck="false">
+  </div>
+</div>
+
+<section class="input-section">
+  <input type="file" id="fileInput" accept=".eml,.txt" style="display:none">
+
+  <div style="display:flex;justify-content:center;gap:10px;margin-bottom:12px;width:100%;max-width:900px;">
+    <button id="uploadBtn" style="background:rgba(0,255,255,0.08);border-color:var(--secondary);color:var(--secondary);text-shadow:0 0 5px var(--secondary);">
+      &#128193; UPLOAD .EML FILE
+    </button>
+  </div>
+
+  <textarea id="headerInput" placeholder="&gt;&gt; Or paste RAW .eml file / email headers here..."></textarea>
+
+  <div class="buttons">
+    <button id="analyzeBtn" style="background:rgba(0,255,0,0.08);">&#9654; ANALYZE</button>
+    <button id="clearBtn" style="background:rgba(255,0,0,0.08);border-color:var(--error);color:var(--error);text-shadow:0 0 5px var(--error);">&#10006; CLEAR</button>
+  </div>
+</section>
+
+<div id="loading" class="hidden">&gt;&gt; ESTABLISHING SECURE CONNECTION...</div>
+<div id="errorBox" class="error hidden"></div>
+
+<section id="results" class="results hidden">
+
+  <!-- Target Info -->
+  <div class="card">
+    <h2>Target Info</h2>
+    <p><strong>Sender:</strong> <span id="from"></span></p>
+    <p><strong>Subject:</strong> <span id="subject"></span></p>
+  </div>
+
+  <!-- Authentication -->
+  <div class="card">
+    <h2>Authentication</h2>
+    <p>SPF: <span id="spf"></span></p>
+    <p>DKIM: <span id="dkim"></span></p>
+    <p>DMARC: <span id="dmarc"></span></p>
+    <p>DMARC Alignment: <span id="dmarcAlign"></span></p>
+  </div>
+
+  <!-- Network Intel -->
+  <div class="card">
+    <h2>Network Intel</h2>
+    <div id="ipBlock"></div>
+    <p style="margin-top:10px;"><strong>Abuse Status:</strong> <span id="abuseStatus"></span></p>
+  </div>
+
+  <!-- Payload -->
+  <div class="card" style="grid-column: 1 / -1;">
+    <h2>Payload Scan</h2>
+    <div class="payload-grid">
+      <div>
+        <p class="payload-section-label">&gt;&gt; DETECTED ATTACHMENTS:</p>
+        <div id="attachmentList" class="list-item scroll-box"></div>
+      </div>
+      <div>
+        <p class="payload-section-label">&gt;&gt; EXTRACTED URLs (<span id="urlCount">0</span> total):</p>
+        <div id="urlList" class="list-item scroll-box"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Warnings -->
+  <div class="card" style="grid-column: 1 / -1;">
+    <h2>Threat Intelligence</h2>
+    <div id="warnings" class="list-item scroll-box"></div>
+  </div>
+
+  <!-- Score -->
+  <div class="card" style="grid-column: 1 / -1;">
+    <h2>Final Security Score</h2>
+    <div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;">
+      <p id="scoreText" style="font-size:1.3rem;font-weight:bold;"></p>
+      <span id="confidenceBadge" class="badge"></span>
+    </div>
+    <div class="progress-bar"><div id="progress"></div></div>
+    <p class="trace-id" id="traceId"></p>
+  </div>
+
+</section>
+
+<footer>THREAT ANALYSIS SYSTEM // ALL CHECKS RUN LOCALLY AGAINST YOUR BACKEND // NO DATA STORED</footer>
+
+<script>
+// ── Matrix rain ───────────────────────────────────────────────────────────
+const canvas = document.getElementById('matrixCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()';
+const fontSize = 16;
+let drops = [];
+
+function initDrops() {
+  const cols = Math.floor(canvas.width / fontSize);
+  drops = Array.from({length: cols}, () => Math.random() * -50);
+}
+initDrops();
+
+function drawMatrix() {
+  ctx.fillStyle = 'rgba(0,0,0,0.05)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#0F0';
+  ctx.font = fontSize + 'px monospace';
+  drops.forEach((y, i) => {
+    ctx.fillText(letters[Math.floor(Math.random() * letters.length)], i * fontSize, y * fontSize);
+    if (y * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i]++;
+  });
+}
+setInterval(drawMatrix, 33);
+
+// ── File upload ───────────────────────────────────────────────────────────
+const fileInput  = document.getElementById('fileInput');
+const uploadBtn  = document.getElementById('uploadBtn');
+const headerInput = document.getElementById('headerInput');
+
+uploadBtn.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    headerInput.value = ev.target.result;
+    errorBox.classList.add('hidden');
+    uploadBtn.textContent = `✅ LOADED: ${file.name}`;
+    uploadBtn.style.borderColor = 'var(--text)';
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  headerInput.value = '';
+  fileInput.value   = '';
+  uploadBtn.textContent     = '📁 UPLOAD .EML FILE';
+  uploadBtn.style.borderColor = 'var(--secondary)';
+  document.getElementById('results').classList.add('hidden');
+  errorBox.classList.add('hidden');
+});
+
+// ── Analyze ───────────────────────────────────────────────────────────────
+const API_URL  = 'http://127.0.0.1:8000/analyze';
+const loading  = document.getElementById('loading');
+const errorBox = document.getElementById('errorBox');
+
+document.getElementById('analyzeBtn').addEventListener('click', async () => {
+  const input = headerInput.value.trim();
+
+  if (!input) {
+    showError('>> ERROR: No payload provided.');
+    return;
+  }
+
+  errorBox.classList.add('hidden');
+  document.getElementById('results').classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  // Build headers — attach Bearer token only if one is configured
+  const token   = document.getElementById('apiToken').value.trim();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  try {
+    const res = await fetch(API_URL, {
+      method:  'POST',
+      headers,
+      body: JSON.stringify({ raw_email: input }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    displayResults(data);
+
+  } catch (err) {
+    showError(`>> SYSTEM FAILURE: ${err.message}`);
+  } finally {
+    loading.classList.add('hidden');
+  }
+});
+
+function showError(msg) {
+  errorBox.textContent = msg;
+  errorBox.classList.remove('hidden');
+}
+
+// ── Display results ───────────────────────────────────────────────────────
+function displayResults(data) {
+  document.getElementById('results').classList.remove('hidden');
+
+  // Target info
+  document.getElementById('from').textContent    = data.analysis_target || 'Unknown';
+  document.getElementById('subject').textContent = data.subject || '(no subject)';
+
+  // Authentication — field name is now `dkim` (not `dkim_crypto`)
+  const auth = data.authentication || {};
+  setStatus('spf',  auth.spf);
+  setStatus('dkim', auth.dkim);
+  setStatus('dmarc', auth.dmarc);
+  setAlignment('dmarcAlign', auth.dmarc_alignment);
+
+  // Network intel
+  const net = data.network_intelligence || {};
+  const ipBlock = document.getElementById('ipBlock');
+  if (net.origin_ip) {
+    ipBlock.innerHTML = `
+      <p><strong>Origin IP:</strong> ${esc(net.origin_ip)}</p>
+      <p style="color:var(--secondary);">&gt; ISP: ${esc(net.isp || 'Unknown')}</p>
+      ${net.country ? `<p style="color:var(--secondary);">&gt; Country: ${esc(net.country)}</p>` : ''}
+      ${net.total_reports > 0 ? `<p style="color:var(--warning);">&gt; Reports: ${net.total_reports} on AbuseIPDB</p>` : ''}
+    `;
+  } else {
+    ipBlock.innerHTML = '<p>No public IP found in headers</p>';
+  }
+
+  const abuseScore  = net.abuse_score || 0;
+  const abuseEl     = document.getElementById('abuseStatus');
+  abuseEl.textContent = abuseScore > 0 ? `ABUSE SCORE: ${abuseScore}%` : 'CLEAN (0% Abuse)';
+  abuseEl.className   = abuseScore > 50 ? 'fail' : abuseScore > 0 ? 'missing' : 'pass';
+
+  // Attachments
+  const attList  = document.getElementById('attachmentList');
+  const atts     = data.payload?.attachments_found || [];
+  attList.innerHTML = '';
+  if (atts.length === 0) {
+    attList.innerHTML = '<p>None Detected</p>';
+  } else {
+    atts.forEach(att => {
+      const p = document.createElement('p');
+      p.innerHTML = `📎 ${esc(att.name)}<br><span style="font-size:0.72rem;color:var(--secondary);">SHA256: ${esc(att.sha256)}</span>`;
+      attList.appendChild(p);
+    });
+  }
+
+  // URLs
+  document.getElementById('urlCount').textContent = data.payload?.url_count ?? 0;
+  populateList('urlList', data.payload?.urls_extracted, '🔗 ');
+
+  // Warnings
+  populateList('warnings', data.security_score?.warnings, '⚠ ');
+
+  // Score + confidence
+  const score      = data.security_score?.score ?? 0;
+  const label      = data.security_score?.label ?? 'UNKNOWN';
+  const confidence = data.security_score?.confidence ?? 'LOW';
+
+  const scoreText = document.getElementById('scoreText');
+  const progress  = document.getElementById('progress');
+  const badge     = document.getElementById('confidenceBadge');
+
+  scoreText.textContent = `Risk: ${score}/100  [ ${label} ]`;
+  progress.style.width  = score + '%';
+
+  badge.textContent  = `${confidence} CONFIDENCE`;
+  badge.className    = 'badge badge-' + confidence.toLowerCase();
+
+  if (score >= 70) {
+    scoreText.style.color        = 'var(--error)';
+    progress.style.background    = 'var(--error)';
+    progress.style.boxShadow     = '0 0 15px var(--error)';
+  } else if (score >= 40) {
+    scoreText.style.color        = 'var(--warning)';
+    progress.style.background    = 'var(--warning)';
+    progress.style.boxShadow     = '0 0 15px var(--warning)';
+  } else {
+    scoreText.style.color        = 'var(--text)';
+    progress.style.background    = 'var(--text)';
+    progress.style.boxShadow     = '0 0 15px var(--text)';
+  }
+
+  // Trace ID from backend
+  if (data.request_id) {
+    document.getElementById('traceId').textContent = `TRACE-ID: ${data.request_id}`;
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function setStatus(id, value) {
+  const el  = document.getElementById(id);
+  const val = (value || 'unknown').toLowerCase();
+  el.textContent = val.toUpperCase();
+  el.className   = val === 'pass' ? 'pass' : (val === 'fail' || val === 'timeout') ? 'fail' : 'missing';
+}
+
+function setAlignment(id, aligned) {
+  const el = document.getElementById(id);
+  if (aligned === true) {
+    el.textContent = 'ALIGNED';
+    el.className   = 'pass';
+  } else if (aligned === false) {
+    el.textContent = 'FAILED';
+    el.className   = 'fail';
+  } else {
+    el.textContent = 'UNKNOWN';
+    el.className   = 'missing';
+  }
+}
+
+function populateList(id, items, icon='') {
+  const container = document.getElementById(id);
+  container.innerHTML = '';
+  if (!items || items.length === 0) {
+    container.innerHTML = '<p>None Detected</p>';
+    return;
+  }
+  items.forEach(item => {
+    const p = document.createElement('p');
+    p.textContent = icon + item;
+    container.appendChild(p);
+  });
+}
+
+/** Escape HTML to prevent XSS from server-returned strings */
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
