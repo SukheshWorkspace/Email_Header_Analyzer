@@ -124,9 +124,6 @@ POST /analyze
 
 
 
-<img width="788" height="1907" alt="_C__Users_ShadowSpider_Desktop_Email%20Header%20Analyzer_index html" src="https://github.com/user-attachments/assets/759fb6d0-50a6-410d-ae3a-3d1442d52bb6" />
-
-
 ---
 
 ## 🎯 Use Cases
