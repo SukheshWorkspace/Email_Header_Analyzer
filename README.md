@@ -142,7 +142,6 @@ POST /analyze
 
 ## 👨‍💻 Author
 
-Your Name
 Sukhesh A
 
 ---
