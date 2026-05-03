@@ -121,6 +121,9 @@ POST /analyze
 <img width="1338" height="637" alt="image" src="https://github.com/user-attachments/assets/ea7cc21b-9539-47a0-9614-ebb6d9ad6c52" />
 
 
+
+
+
 <img width="788" height="1907" alt="_C__Users_ShadowSpider_Desktop_Email%20Header%20Analyzer_index html" src="https://github.com/user-attachments/assets/759fb6d0-50a6-410d-ae3a-3d1442d52bb6" />
 
 
